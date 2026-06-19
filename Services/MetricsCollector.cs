@@ -81,7 +81,7 @@ public class MetricsCollector : BackgroundService
             {
                 ContainerId = containr.Id,
                 ContainerName = containr.Names.FirstOrDefault()?.TrimStart('/') ?? "unknown",
-                CpuPercent = stats.CalculateCpuPercent(stats),
+                CpuPercent = CalculateCpuPercent(stats),
                 MemoryBytes = stats.MemoryStats.Usage,
                 NetworkRxBytes = stats.Networks?.Values.Sum(n => n.RxBytes) ?? 0,
                 NetworkTxBytes = stats.Networks?.Values.Sum(n => n.TxBytes) ?? 0,
