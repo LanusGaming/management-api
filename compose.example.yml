@@ -2,7 +2,7 @@ name: dashboard
 
 services:
   dashboard_api:
-    image: 
+    image: git.patrick-dev.net/patrick/dashboard-api:latest
     container_name: dashboard_api
     restart: unless-stopped
     environment:
