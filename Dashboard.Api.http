@@ -5,8 +5,8 @@ POST {{host}}/api/auth/register
 Content-Type: application/json
 
 {
-  "username": "patrick",
-  "password": "testpassword123"
+  "username": "",
+  "password": ""
 }
 
 ### Login
@@ -14,8 +14,8 @@ POST {{host}}/api/auth/login
 Content-Type: application/json
 
 {
-  "username": "patrick",
-  "password": "testpassword123"
+  "username": "",
+  "password": ""
 }
 
 ### Refresh token
@@ -23,9 +23,9 @@ POST {{host}}/api/auth/refresh
 Content-Type: application/json
 
 {
-  "refreshToken": "+0zzRoem9gZbwR0Yf4Gd+nC/vrt4Iiw/S6fzi42QCCh3QaDMIMWwLkaFj/nR8pBoRMIVFfrDjHfilGZhmxnJNw=="
+  "refreshToken": ""
 }
 
 ### Get container summaries
 GET {{host}}/api/containers
-Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1laWRlbnRpZmllciI6IjEiLCJodHRwOi8vc2NoZW1hcy54bWxzb2FwLm9yZy93cy8yMDA1LzA1L2lkZW50aXR5L2NsYWltcy9uYW1lIjoicGF0cmljayIsImV4cCI6MTc4MTkwMDIzM30.uXVy-cit9bSTOpDP1LssjeGjCB2-4amHpr1fpnCt3_A
+Authorization: Bearer 
