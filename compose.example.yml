@@ -1,0 +1,33 @@
+name: dashboard
+
+services:
+  dashboard_api:
+    image: 
+    container_name: dashboard_api
+    restart: unless-stopped
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Host=dashboard_database;Port=5432;Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
+      - Jwt__Secret=${JWT_SECRET}
+      - Jwt__AccessTokenExpiryMinutes=15
+      - Jwt__RefreshTokenExpiryDays=7
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - dashboard_database
+
+  dashboard_database:
+    image: timescale/timescaledb:latest-pg16
+    container_name: dashboard_database
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=${DB_USER}
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+      - POSTGRES_DB=${DB_NAME}
+    volumes:
+      - /mnt/user/database/dashboard/timescaledb:/var/lib/postgresql/data
+
+networks:
+  default:
+    name: dashboard
+    driver: bridge
