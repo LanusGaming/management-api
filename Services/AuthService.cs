@@ -18,7 +18,23 @@ public class AuthService : IAuthService
         _tokenService = tokenService;
     }
 
-    public async Task<LoginResponse?> LoginAsync(LoginRequest request)
+    public async Task<bool> RegisterAsync(AuthRequest request)
+    {
+        if (await _context.Users.AnyAsync(u => u.Username == request.Username))
+            return false;
+
+        var user = new User
+        {
+            Username = request.Username,
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password)
+        };
+
+        _context.Users.Add(user);
+        await _context.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<LoginResponse?> LoginAsync(AuthRequest request)
     {
         var user = await _context.Users
             .Include(u => u.RefreshTokens)

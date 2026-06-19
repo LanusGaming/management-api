@@ -4,7 +4,8 @@ namespace Dashboard.Api.Services;
 
 public interface IAuthService
 {
-    Task<LoginResponse?> LoginAsync(LoginRequest request);
+    Task<bool> RegisterAsync(AuthRequest request);
+    Task<LoginResponse?> LoginAsync(AuthRequest request);
     Task<LoginResponse?> RefreshAsync(string refreshToken);
     Task RevokeAsync(string refreshToken);
 }

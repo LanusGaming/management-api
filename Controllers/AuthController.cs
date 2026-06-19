@@ -15,8 +15,19 @@ public class AuthController : ControllerBase
         _authService = authService;
     }
 
+    [HttpPost("register")]
+    public async Task<IActionResult> Register(AuthRequest request)
+    {
+        var success = await _authService.RegisterAsync(request);
+
+        if (!success)
+            return Conflict(new { message = "Username already taken" });
+
+        return Created("", new { message = "User created successfully" });
+    }
+
     [HttpPost("login")]
-    public async Task<IActionResult> Login(LoginRequest request)
+    public async Task<IActionResult> Login(AuthRequest request)
     {
         var result = await _authService.LoginAsync(request);
 

@@ -14,7 +14,11 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
-builder.Services.AddHostedService<MetricsCollector>();
+
+if (!builder.Environment.IsDevelopment())
+{
+    builder.Services.AddHostedService<MetricsCollector>();
+}
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
