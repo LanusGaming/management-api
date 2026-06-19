@@ -1,0 +1,22 @@
+name: Build and Push
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Log in to Gitea registry
+        run: echo "${{ secrets.REGISTRY_TOKEN }}" | docker login git.patrick-dev.net -u "${{ secrets.REGISTRY_USER }}" --password-stdin
+
+      - name: Build image
+        run: docker build -t git.patrick-dev.net/${{ secrets.REGISTRY_USER }}/dashboard-api:latest .
+
+      - name: Push image
+        run: docker push git.patrick-dev.net/${{ secrets.REGISTRY_USER }}/dashboard-api:latest
