@@ -1,6 +1,31 @@
-@Dashboard.Api_HostAddress = http://localhost:5087
+@host = http://localhost:5087
 
-GET {{Dashboard.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+### Register a user (run this first)
+POST {{host}}/api/auth/register
+Content-Type: application/json
 
-###
+{
+  "username": "patrick",
+  "password": "testpassword123"
+}
+
+### Login
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "patrick",
+  "password": "testpassword123"
+}
+
+### Refresh token
+POST {{host}}/api/auth/refresh
+Content-Type: application/json
+
+{
+  "refreshToken": "paste-refresh-token-here"
+}
+
+### Get container summaries
+GET {{host}}/api/containers
+Authorization: Bearer paste-access-token-here
