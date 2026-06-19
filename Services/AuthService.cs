@@ -58,6 +58,7 @@ public class AuthService : IAuthService
         return new LoginResponse
         {
             AccessToken = accessToken,
+            RefreshToken = refreshToken,
             ExpiresAt = DateTime.UtcNow.AddMinutes(
                 _configuration.GetValue<int>("Jwt:AccessTokenExpiryMinutes"))
         };
