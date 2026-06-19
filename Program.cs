@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Dashboard.Api.Data;
+using Dashboard.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
