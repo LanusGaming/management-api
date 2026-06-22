@@ -42,7 +42,7 @@ public class AuthController : ControllerBase
         {
             HttpOnly = true,
             Secure = !_environment.IsDevelopment(),
-            SameSite = SameSiteMode.Strict,
+            SameSite = _environment.IsDevelopment() ? SameSiteMode.Lax : SameSiteMode.Strict,
             Expires = DateTime.UtcNow.AddDays(
                 _configuration.GetValue<int>("Jwt:RefreshTokenExpiryDays"))
         });
