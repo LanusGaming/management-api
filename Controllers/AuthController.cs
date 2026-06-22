@@ -8,10 +8,14 @@ namespace Dashboard.Api.Controllers;
 [Route("api/auth")]
 public class AuthController : ControllerBase
 {
+    private readonly IConfiguration _configuration;
+    private readonly IWebHostEnvironment _environment;
     private readonly IAuthService _authService;
 
-    public AuthController(IAuthService authService)
+    public AuthController(IConfiguration configuration, IWebHostEnvironment environment, IAuthService authService)
     {
+        _configuration = configuration;
+        _environment = environment;
         _authService = authService;
     }
 
@@ -34,24 +38,53 @@ public class AuthController : ControllerBase
         if (result == null)
             return Unauthorized(new { message = "Invalid username or password" });
 
-        return Ok(result);
+        Response.Cookies.Append("refreshToken", result.RefreshToken, new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = !_environment.IsDevelopment(),
+            SameSite = _environment.IsDevelopment() ? SameSiteMode.Lax : SameSiteMode.Strict,
+            Expires = DateTime.UtcNow.AddDays(
+                _configuration.GetValue<int>("Jwt:RefreshTokenExpiryDays"))
+        });
+
+        return Ok(new
+        {
+            accessToken = result.AccessToken,
+            expiresAt = result.ExpiresAt
+        });
     }
 
     [HttpPost("refresh")]
-    public async Task<IActionResult> Refresh(RefreshRequest request)
+    public async Task<IActionResult> Refresh()
     {
-        var result = await _authService.RefreshAsync(request.RefreshToken);
+        var refreshToken = Request.Cookies["refreshToken"];
+
+        if (refreshToken == null)
+            return Unauthorized(new { message = "No refresh token" });
+
+        var result = await _authService.RefreshAsync(refreshToken);
 
         if (result == null)
             return Unauthorized(new { message = "Invalid or expired refresh token" });
 
-        return Ok(result);
+        return Ok(new
+        {
+            accessToken = result.AccessToken,
+            expiresAt = result.ExpiresAt
+        });
     }
 
     [HttpPost("logout")]
-    public async Task<IActionResult> Logout(RefreshRequest request)
+    public async Task<IActionResult> Logout()
     {
-        await _authService.RevokeAsync(request.RefreshToken);
+        var refreshToken = Request.Cookies["refreshToken"];
+
+        if (refreshToken != null)
+        {
+            await _authService.RevokeAsync(refreshToken);
+            Response.Cookies.Delete("refreshToken");
+        }
+        
         return NoContent();
     }
 }
