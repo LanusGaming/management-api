@@ -42,7 +42,7 @@ public class MetricsCollector : BackgroundService
             BaseAddress = new Uri("http://localhost") // Base address is required but won't be used
         };
 
-        _interval = TimeSpan.FromSeconds(configuration.GetValue<int>("MetricsCollectionIntervalSeconds"));
+        _interval = TimeSpan.FromMilliseconds(configuration.GetValue<long>("MetricsCollectionIntervalMillis"));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -74,22 +74,56 @@ public class MetricsCollector : BackgroundService
         var metrics = new List<ContainerMetric>();
         var summaries = new List<ContainerSummary>();
 
-        foreach (var containr in containers)
+        foreach (var container in containers)
         {
-            var statsJson = await _dockerClient.GetStringAsync($"/containers/{containr.Id}/stats?stream=false");
+            var statsJson = await _dockerClient.GetStringAsync($"/containers/{container.Id}/stats?stream=false");
             var stats = JsonSerializer.Deserialize<DockerStats>(statsJson);
 
             if (stats == null) continue;
 
+            var inspectJson = await _dockerClient.GetStringAsync($"/containers/{container.Id}/json");
+            var inspect = JsonSerializer.Deserialize<DockerContainerInspect>(inspectJson);
+
+            var uptime = TimeSpan.Zero;
+            if (inspect?.State.Status == "running" &&
+                DateTime.TryParse(
+                    inspect.State.StartedAt,
+                    null,
+                    System.Globalization.DateTimeStyles.RoundtripKind,
+                    out var startedAt))
+            {
+                uptime = DateTime.UtcNow - startedAt.ToUniversalTime();
+            }
+
+            var name = container.Names.FirstOrDefault()?.TrimStart('/') ?? "unknown";
+            var cpu = CalculateCpuPercent(stats);
+            var memory = stats.MemoryStats.Usage;
+            var rxBytes = stats.Networks?.Values.Sum(n => n.RxBytes) ?? 0;
+            var txBytes = stats.Networks?.Values.Sum(n => n.TxBytes) ?? 0;
+            var now = DateTime.UtcNow;
+
             metrics.Add(new ContainerMetric
             {
-                ContainerId = containr.Id,
-                ContainerName = containr.Names.FirstOrDefault()?.TrimStart('/') ?? "unknown",
-                CpuPercent = CalculateCpuPercent(stats),
-                MemoryBytes = stats.MemoryStats.Usage,
-                NetworkRxBytes = stats.Networks?.Values.Sum(n => n.RxBytes) ?? 0,
-                NetworkTxBytes = stats.Networks?.Values.Sum(n => n.TxBytes) ?? 0,
-                RecordedAt = DateTime.UtcNow
+                ContainerId = container.Id,
+                ContainerName = name,
+                CpuPercent = cpu,
+                MemoryBytes = memory,
+                NetworkRxBytes = rxBytes,
+                NetworkTxBytes = txBytes,
+                RecordedAt = now
+            });
+
+            summaries.Add(new ContainerSummary
+            {
+                ContainerId = container.Id,
+                ContainerName = name,
+                Status = inspect?.State.Status ?? "unknown",
+                UptimeSeconds = (long) uptime.TotalSeconds,
+                CpuPercent = cpu,
+                MemoryBytes = memory,
+                NetworkRxBytes = rxBytes,
+                NetworkTxBytes = txBytes,
+                RecordedAt = now
             });
         }
 
