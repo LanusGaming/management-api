@@ -1,9 +1,10 @@
+using Dashboard.Api.Data;
+using Dashboard.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
-using Dashboard.Api.Data;
-using Dashboard.Api.Services;
+using System.Text.Json;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,11 +15,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
-
-if (!builder.Environment.IsDevelopment())
-{
-    builder.Services.AddHostedService<MetricsCollector>();
-}
+builder.Services.AddSingleton<MetricsBroadcaster>();
+builder.Services.AddHostedService<MetricsCollector>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -39,6 +37,8 @@ var app = builder.Build();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
+
+
 
 using (var scope = app.Services.CreateScope())
 {

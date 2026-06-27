@@ -1,8 +1,10 @@
 ﻿using Dashboard.Api.Data;
 using Dashboard.Api.DTOs;
+using Dashboard.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 
 namespace Dashboard.Api.Controllers;
 
@@ -12,12 +14,16 @@ namespace Dashboard.Api.Controllers;
 public class ContainersController : ControllerBase
 {
     private readonly IConfiguration _configuration;
+    private readonly IAuthService _authService;
     private readonly AppDbContext _context;
+    private readonly MetricsBroadcaster _broadcaster;
 
-    public ContainersController(IConfiguration configuration, AppDbContext context)
+    public ContainersController(IConfiguration configuration, IAuthService authService, AppDbContext context, MetricsBroadcaster broadcaster)
     {
         _configuration = configuration;
+        _authService = authService;
         _context = context;
+        _broadcaster = broadcaster;
     }
 
     [HttpGet]
@@ -40,6 +46,39 @@ public class ContainersController : ControllerBase
         });
 
         return Ok(summaries);
+    }
+
+    [HttpGet("stream")]
+    [AllowAnonymous]
+    public async Task StreamMetrics(CancellationToken cancellationToken)
+    {
+        var refreshToken = Request.Cookies["refreshToken"];
+
+        if (refreshToken == null || await _authService.ValidateAsync(refreshToken) == null)
+        {
+            Response.StatusCode = 401;
+            return;
+        }
+
+        Response.Headers["Content-Type"] = "text/event-stream";
+        Response.Headers["Cache-Control"] = "no-cache";
+        Response.Headers["X-Accel-Buffering"] = "no";
+
+        var channel = _broadcaster.Subscribe();
+
+        try
+        {
+            await foreach (var summaries in channel.Reader.ReadAllAsync(cancellationToken))
+            {
+                var json = JsonSerializer.Serialize(summaries);
+                await Response.WriteAsync($"data: {json}\n\n", cancellationToken);
+                await Response.Body.FlushAsync(cancellationToken);
+            }
+        }
+        finally
+        {
+            _broadcaster.Unsubscribe(channel);
+        }
     }
 
     [HttpGet("{containerId}/history")]
