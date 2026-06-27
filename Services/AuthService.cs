@@ -64,13 +64,23 @@ public class AuthService : IAuthService
         };
     }
 
-    public async Task<LoginResponse?> RefreshAsync(string refreshToken)
+    public async Task<RefreshToken?> ValidateAsync(string refreshToken)
     {
         var token = await _context.RefreshTokens
             .Include(rt => rt.User)
             .FirstOrDefaultAsync(rt => rt.Token == refreshToken);
 
         if (token == null || token.IsRevoked || token.ExpiresAt < DateTime.UtcNow)
+            return null;
+
+        return token;
+    }
+
+    public async Task<LoginResponse?> RefreshAsync(string refreshToken)
+    {
+        var token = await ValidateAsync(refreshToken);
+
+        if (token == null)
             return null;
 
         var accessToken = _tokenService.GenerateAccessToken(token.User);

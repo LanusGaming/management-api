@@ -1,4 +1,5 @@
 ﻿using Dashboard.Api.Data;
+using Dashboard.Api.DTOs;
 using Dashboard.Api.Models;
 using System.Net.Sockets;
 using System.Text.Json;
@@ -9,13 +10,15 @@ public class MetricsCollector : BackgroundService
 {
     private readonly IConfiguration _configuration;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly MetricsBroadcaster _broadcaster;
     private readonly HttpClient _dockerClient;
     private readonly TimeSpan _interval;
 
-    public MetricsCollector(IConfiguration configuration, IServiceScopeFactory scopeFactory)
+    public MetricsCollector(IConfiguration configuration, IServiceScopeFactory scopeFactory, MetricsBroadcaster broadcaster)
     {
         _configuration = configuration;
         _scopeFactory = scopeFactory;
+        _broadcaster = broadcaster;
 
         var handler = new SocketsHttpHandler
         {
@@ -69,6 +72,7 @@ public class MetricsCollector : BackgroundService
         if (containers == null || !containers.Any()) return;
 
         var metrics = new List<ContainerMetric>();
+        var summaries = new List<ContainerSummary>();
 
         foreach (var containr in containers)
         {
@@ -91,6 +95,8 @@ public class MetricsCollector : BackgroundService
 
         context.ContainerMetrics.AddRange(metrics);
         await context.SaveChangesAsync();
+
+        _broadcaster.Broadcast(summaries);
     }
 
     private double CalculateCpuPercent(DockerStats stats)
