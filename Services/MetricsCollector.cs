@@ -1,6 +1,7 @@
 ﻿using Dashboard.Api.Data;
 using Dashboard.Api.DTOs;
 using Dashboard.Api.Models;
+using Microsoft.AspNetCore.SignalR.Protocol;
 using System.Net.Sockets;
 using System.Text.Json;
 
@@ -71,15 +72,40 @@ public class MetricsCollector : BackgroundService
 
         if (containers == null || !containers.Any()) return;
 
-        var metrics = new List<ContainerMetric>();
-        var summaries = new List<ContainerSummary>();
+        var tasks = containers.Select(c => CollectContainerAsync(c));
+        var results = await Task.WhenAll(tasks);
 
-        foreach (var container in containers)
+        var valid = results.Where(r => r.HasValue).Select(r => r!.Value).ToList();
+        if (!valid.Any()) return;
+
+        context.ContainerMetrics.AddRange(valid.Select(r => r.metric));
+        await context.SaveChangesAsync();
+
+        _broadcaster.Broadcast(valid.Select(r => r.summary).ToList());
+    }
+
+    private async Task<(ContainerMetric metric, ContainerSummary summary)?> CollectContainerAsync(DockerContainer container)
+    {
+        try
         {
             var statsJson = await _dockerClient.GetStringAsync($"/containers/{container.Id}/stats?stream=false");
             var stats = JsonSerializer.Deserialize<DockerStats>(statsJson);
 
-            if (stats == null) continue;
+            if (stats == null) return null;
+
+            var inspectJson = await _dockerClient.GetStringAsync($"/containers/{container.Id}/json");
+            var inspect = JsonSerializer.Deserialize<DockerContainerInspect>(inspectJson);
+
+            var uptime = TimeSpan.Zero;
+            if (inspect?.State.Status == "running" &&
+                DateTime.TryParse(
+                    inspect.State.StartedAt,
+                    null,
+                    System.Globalization.DateTimeStyles.RoundtripKind,
+                    out var startedAt))
+            {
+                uptime = DateTime.UtcNow - startedAt.ToUniversalTime();
+            }
 
             var name = container.Names.FirstOrDefault()?.TrimStart('/') ?? "unknown";
             var cpu = CalculateCpuPercent(stats);
@@ -87,8 +113,8 @@ public class MetricsCollector : BackgroundService
             var rxBytes = stats.Networks?.Values.Sum(n => n.RxBytes) ?? 0;
             var txBytes = stats.Networks?.Values.Sum(n => n.TxBytes) ?? 0;
             var now = DateTime.UtcNow;
-
-            metrics.Add(new ContainerMetric
+            
+            return (new ContainerMetric
             {
                 ContainerId = container.Id,
                 ContainerName = name,
@@ -97,26 +123,26 @@ public class MetricsCollector : BackgroundService
                 NetworkRxBytes = rxBytes,
                 NetworkTxBytes = txBytes,
                 RecordedAt = now
-            });
-
-            summaries.Add(new ContainerSummary
+            },
+            new ContainerSummary
             {
                 ContainerId = container.Id,
                 ContainerName = name,
-                Status = container.State,
-                Uptime = container.Status,
+                Status = inspect?.State.Status ?? "unknown",
+                UptimeSeconds = (long) uptime.TotalSeconds,
                 CpuPercent = cpu,
                 MemoryBytes = memory,
                 NetworkRxBytes = rxBytes,
                 NetworkTxBytes = txBytes,
                 RecordedAt = now
-            });
+            }
+            );
         }
-
-        context.ContainerMetrics.AddRange(metrics);
-        await context.SaveChangesAsync();
-
-        _broadcaster.Broadcast(summaries);
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Failed to collect metrics for {container.Id[..12]}: {ex.Message}");
+            return null;
+        }
     }
 
     private double CalculateCpuPercent(DockerStats stats)
