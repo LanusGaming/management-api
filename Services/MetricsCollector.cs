@@ -48,7 +48,8 @@ public class MetricsCollector : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        using var timer = new PeriodicTimer(_interval);
+        while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             try
             {
@@ -58,7 +59,6 @@ public class MetricsCollector : BackgroundService
             {
                 Console.WriteLine($"Metrics collection failed: {ex.Message}");
             }
-            await Task.Delay(_interval, stoppingToken);
         }
     }
 
@@ -67,7 +67,7 @@ public class MetricsCollector : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var containersJson = await _dockerClient.GetStringAsync("/containers/json");
+        var containersJson = await _dockerClient.GetStringAsync("/containers/json?all=true");
         var containers = JsonSerializer.Deserialize<List<DockerContainer>>(containersJson);
 
         if (containers == null || !containers.Any()) return;
