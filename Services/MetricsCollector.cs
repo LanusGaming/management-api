@@ -109,7 +109,7 @@ public class MetricsCollector : BackgroundService
 
             var name = container.Names.FirstOrDefault()?.TrimStart('/') ?? "unknown";
             var cpu = CalculateCpuPercent(stats);
-            var memory = stats.MemoryStats.Usage;
+            var memory = CalulateMemoryUsage(stats);
             var rxBytes = stats.Networks?.Values.Sum(n => n.RxBytes) ?? 0;
             var txBytes = stats.Networks?.Values.Sum(n => n.TxBytes) ?? 0;
             var now = DateTime.UtcNow;
@@ -142,6 +142,21 @@ public class MetricsCollector : BackgroundService
         {
             Console.WriteLine($"Failed to collect metrics for {container.Id[..12]}: {ex.Message}");
             return null;
+        }
+    }
+
+    private long CalulateMemoryUsage(DockerStats stats)
+    {
+        if (stats.MemoryStats.Stats.TryGetValue("cache", out var cache))
+        {
+            // cgroups v1
+            return stats.MemoryStats.Usage - cache;
+        }
+        else
+        {
+            // cgroups v2
+            var inactiveFile = stats.MemoryStats.Stats.GetValueOrDefault("inactive_file", 0L);
+            return stats.MemoryStats.Usage - inactiveFile;
         }
     }
 
