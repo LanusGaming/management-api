@@ -9,27 +9,12 @@ public class DockerContainer
 
     [JsonPropertyName("Names")]
     public List<string> Names { get; set; } = new();
-}
-
-public class DockerContainerInspect
-{
-    [JsonPropertyName("Id")]
-    public string Id { get; set; } = string.Empty;
 
     [JsonPropertyName("State")]
-    public ContainerState State { get; set; } = new();
-}
+    public string State { get; set; } = string.Empty;
 
-public class ContainerState
-{
     [JsonPropertyName("Status")]
     public string Status { get; set; } = string.Empty;
-
-    [JsonPropertyName("StartedAt")]
-    public string StartedAt { get; set; } = string.Empty;
-
-    [JsonPropertyName("FinishedAt")]
-    public string FinishedAt { get; set; } = string.Empty;
 }
 
 public class DockerStats

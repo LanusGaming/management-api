@@ -81,20 +81,6 @@ public class MetricsCollector : BackgroundService
 
             if (stats == null) continue;
 
-            var inspectJson = await _dockerClient.GetStringAsync($"/containers/{container.Id}/json");
-            var inspect = JsonSerializer.Deserialize<DockerContainerInspect>(inspectJson);
-
-            var uptime = TimeSpan.Zero;
-            if (inspect?.State.Status == "running" &&
-                DateTime.TryParse(
-                    inspect.State.StartedAt,
-                    null,
-                    System.Globalization.DateTimeStyles.RoundtripKind,
-                    out var startedAt))
-            {
-                uptime = DateTime.UtcNow - startedAt.ToUniversalTime();
-            }
-
             var name = container.Names.FirstOrDefault()?.TrimStart('/') ?? "unknown";
             var cpu = CalculateCpuPercent(stats);
             var memory = stats.MemoryStats.Usage;
@@ -117,8 +103,8 @@ public class MetricsCollector : BackgroundService
             {
                 ContainerId = container.Id,
                 ContainerName = name,
-                Status = inspect?.State.Status ?? "unknown",
-                UptimeSeconds = (long) uptime.TotalSeconds,
+                Status = container.State,
+                Uptime = container.Status,
                 CpuPercent = cpu,
                 MemoryBytes = memory,
                 NetworkRxBytes = rxBytes,
