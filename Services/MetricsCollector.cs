@@ -48,7 +48,8 @@ public class MetricsCollector : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        using var timer = new PeriodicTimer(_interval);
+        while (await timer.WaitForNextTickAsync(stoppingToken))
         {
             try
             {
@@ -58,7 +59,6 @@ public class MetricsCollector : BackgroundService
             {
                 Console.WriteLine($"Metrics collection failed: {ex.Message}");
             }
-            await Task.Delay(_interval, stoppingToken);
         }
     }
 
@@ -67,7 +67,7 @@ public class MetricsCollector : BackgroundService
         using var scope = _scopeFactory.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
-        var containersJson = await _dockerClient.GetStringAsync("/containers/json");
+        var containersJson = await _dockerClient.GetStringAsync("/containers/json?all=true");
         var containers = JsonSerializer.Deserialize<List<DockerContainer>>(containersJson);
 
         if (containers == null || !containers.Any()) return;
@@ -109,7 +109,7 @@ public class MetricsCollector : BackgroundService
 
             var name = container.Names.FirstOrDefault()?.TrimStart('/') ?? "unknown";
             var cpu = CalculateCpuPercent(stats);
-            var memory = stats.MemoryStats.Usage;
+            var memory = CalulateMemoryUsage(stats);
             var rxBytes = stats.Networks?.Values.Sum(n => n.RxBytes) ?? 0;
             var txBytes = stats.Networks?.Values.Sum(n => n.TxBytes) ?? 0;
             var now = DateTime.UtcNow;
@@ -142,6 +142,21 @@ public class MetricsCollector : BackgroundService
         {
             Console.WriteLine($"Failed to collect metrics for {container.Id[..12]}: {ex.Message}");
             return null;
+        }
+    }
+
+    private long CalulateMemoryUsage(DockerStats stats)
+    {
+        if (stats.MemoryStats.Stats.TryGetValue("cache", out var cache))
+        {
+            // cgroups v1
+            return stats.MemoryStats.Usage - cache;
+        }
+        else
+        {
+            // cgroups v2
+            var inactiveFile = stats.MemoryStats.Stats.GetValueOrDefault("inactive_file", 0L);
+            return stats.MemoryStats.Usage - inactiveFile;
         }
     }
 

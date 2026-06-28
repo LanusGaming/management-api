@@ -69,6 +69,9 @@ public class MemoryStats
 {
     [JsonPropertyName("usage")]
     public long Usage { get; set; }
+
+    [JsonPropertyName("stats")]
+    public Dictionary<string, long> Stats { get; set; } = new();
 }
 
 public class NetworkStats
