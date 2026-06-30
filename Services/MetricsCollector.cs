@@ -78,7 +78,7 @@ public class MetricsCollector : BackgroundService
         var valid = results.Where(r => r.HasValue).Select(r => r!.Value).ToList();
         if (!valid.Any()) return;
 
-        context.ContainerMetrics.AddRange(valid.Select(r => r.metric));
+        context.ContainerMetrics.AddRange(valid.Where(r => r.summary.UptimeSeconds > 0).Select(r => r.metric));
         await context.SaveChangesAsync();
 
         _broadcaster.Broadcast(valid.Select(r => r.summary).ToList());
