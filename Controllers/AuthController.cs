@@ -1,8 +1,8 @@
-﻿using Dashboard.Api.DTOs;
-using Dashboard.Api.Services;
+﻿using Management.Api.DTOs;
+using Management.Api.Services;
 using Microsoft.AspNetCore.Mvc;
 
-namespace Dashboard.Api.Controllers;
+namespace Management.Api.Controllers;
 
 [ApiController]
 [Route("api/auth")]

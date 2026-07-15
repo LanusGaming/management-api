@@ -1,9 +1,9 @@
-﻿using Dashboard.Api.Data;
-using Dashboard.Api.DTOs;
-using Dashboard.Api.Models;
+﻿using Management.Api.Data;
+using Management.Api.DTOs;
+using Management.Api.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace Dashboard.Api.Services;
+namespace Management.Api.Services;
 
 public class AuthService : IAuthService
 {

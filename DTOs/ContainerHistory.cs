@@ -1,4 +1,4 @@
-﻿namespace Dashboard.Api.DTOs;
+﻿namespace Management.Api.DTOs;
 
 public class ContainerHistory
 {

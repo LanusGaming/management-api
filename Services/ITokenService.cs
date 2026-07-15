@@ -1,6 +1,6 @@
-﻿using Dashboard.Api.Models;
+﻿using Management.Api.Models;
 
-namespace Dashboard.Api.Services;
+namespace Management.Api.Services;
 
 public interface ITokenService
 {

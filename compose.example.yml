@@ -2,25 +2,22 @@ name: dashboard
 
 services:
   dashboard:
-    image: nginx:alpine
+    image: git.patrick-dev.net/patrick/dashboard:latest
     container_name: dashboard
     restart: unless-stopped
-    volumes:
-      - /mnt/user/websites/dashboard:/usr/share/nginx/html:ro
-      - ${APPDATA_ROOT}/dashboard/nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - dashboard_api
-      
-  dashboard_api:
-    image: git.patrick-dev.net/patrick/dashboard-api:latest
-    container_name: dashboard_api
+      - management_api
+
+  management_api:
+    image: git.patrick-dev.net/patrick/management-api:latest
+    container_name: management_api
     restart: unless-stopped
     environment:
-      - ASPNETCORE_ENVIRONMENT=Production
-      - ConnectionStrings__DefaultConnection=Host=dashboard_database;Port=5432;Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}
-      - Jwt__Secret=${JWT_SECRET}
-      - Jwt__AccessTokenExpiryMinutes=15
-      - Jwt__RefreshTokenExpiryDays=7
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__DefaultConnection: "Host=dashboard_database;Port=5432;Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}"
+      Jwt__Secret: "${JWT_SECRET}"
+      Jwt__AccessTokenExpiryMinutes: "15"
+      Jwt__RefreshTokenExpiryDays: "7"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
@@ -31,9 +28,9 @@ services:
     container_name: dashboard_database
     restart: unless-stopped
     environment:
-      - POSTGRES_USER=${DB_USER}
-      - POSTGRES_PASSWORD=${DB_PASSWORD}
-      - POSTGRES_DB=${DB_NAME}
+      POSTGRES_USER: "${DB_USER}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD}"
+      POSTGRES_DB: "${DB_NAME}"
     volumes:
       - /mnt/user/database/dashboard/timescaledb:/var/lib/postgresql/data
 

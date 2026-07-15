@@ -1,8 +1,8 @@
-﻿using Dashboard.Api.DTOs;
-using Dashboard.Api.Models;
+﻿using Management.Api.DTOs;
+using Management.Api.Models;
 using System.Threading.Channels;
 
-namespace Dashboard.Api.Services;
+namespace Management.Api.Services;
 
 public class MetricsBroadcaster
 {

@@ -1,11 +1,11 @@
-﻿using Dashboard.Api.Models;
+﻿using Management.Api.Models;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 
-namespace Dashboard.Api.Services;
+namespace Management.Api.Services;
 
 public class TokenService : ITokenService
 {

@@ -1,5 +1,5 @@
-using Dashboard.Api.Data;
-using Dashboard.Api.Services;
+using Management.Api.Data;
+using Management.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;

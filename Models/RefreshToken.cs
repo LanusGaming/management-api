@@ -1,4 +1,4 @@
-﻿namespace Dashboard.Api.Models;
+﻿namespace Management.Api.Models;
 
 public class RefreshToken
 {

@@ -1,11 +1,11 @@
-﻿using Dashboard.Api.Data;
-using Dashboard.Api.DTOs;
-using Dashboard.Api.Models;
+﻿using Management.Api.Data;
+using Management.Api.DTOs;
+using Management.Api.Models;
 using Microsoft.AspNetCore.SignalR.Protocol;
 using System.Net.Sockets;
 using System.Text.Json;
 
-namespace Dashboard.Api.Services;
+namespace Management.Api.Services;
 
 public class MetricsCollector : BackgroundService
 {

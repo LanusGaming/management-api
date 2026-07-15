@@ -1,12 +1,12 @@
-﻿using Dashboard.Api.Data;
-using Dashboard.Api.DTOs;
-using Dashboard.Api.Services;
+﻿using Management.Api.Data;
+using Management.Api.DTOs;
+using Management.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 
-namespace Dashboard.Api.Controllers;
+namespace Management.Api.Controllers;
 
 [ApiController]
 [Route("api/containers")]
