@@ -7,6 +7,7 @@ services:
     restart: unless-stopped
     depends_on:
       - management_api
+      - auth_api
 
   management_api:
     image: git.patrick-dev.net/patrick/management-api:latest
@@ -15,13 +16,27 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: "Production"
       ConnectionStrings__DefaultConnection: "Host=dashboard_database;Port=5432;Database=${DB_NAME};Username=${DB_USER};Password=${DB_PASSWORD}"
-      Jwt__Secret: "${JWT_SECRET}"
-      Jwt__AccessTokenExpiryMinutes: "15"
-      Jwt__RefreshTokenExpiryDays: "7"
+      Jwt__Authority: "http://auth_api:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     depends_on:
       - dashboard_database
+      - auth_api
+
+  auth_api:
+    image: git.patrick-dev.net/patrick/auth-api:latest
+    container_name: auth_api
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: "Production"
+      ConnectionStrings__DefaultConnection: "Host=auth_database;Port=5432;Database=${AUTH_DB_NAME};Username=${AUTH_DB_USER};Password=${AUTH_DB_PASSWORD}"
+      Jwt__SigningKeyPem: "${JWT_SIGNING_KEY}"
+      Jwt__KeyId: "${JWT_KEY_ID}"
+      Jwt__Issuer: "http://auth_api:8080"
+      Jwt__AccessTokenExpiryMinutes: "15"
+      Jwt__RefreshTokenExpiryDays: "7"
+    depends_on:
+      - auth_database
 
   dashboard_database:
     image: timescale/timescaledb:latest-pg16
@@ -33,6 +48,17 @@ services:
       POSTGRES_DB: "${DB_NAME}"
     volumes:
       - /mnt/user/database/dashboard/timescaledb:/var/lib/postgresql/data
+
+  auth_database:
+    image: postgres:16-alpine
+    container_name: auth_database
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: "${AUTH_DB_USER}"
+      POSTGRES_PASSWORD: "${AUTH_DB_PASSWORD}"
+      POSTGRES_DB: "${AUTH_DB_NAME}"
+    volumes:
+      - /mnt/user/database/dashboard/auth-postgres:/var/lib/postgresql/data
 
 networks:
   default:

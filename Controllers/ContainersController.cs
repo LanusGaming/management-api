@@ -14,14 +14,12 @@ namespace Management.Api.Controllers;
 public class ContainersController : ControllerBase
 {
     private readonly IConfiguration _configuration;
-    private readonly IAuthService _authService;
     private readonly AppDbContext _context;
     private readonly MetricsBroadcaster _broadcaster;
 
-    public ContainersController(IConfiguration configuration, IAuthService authService, AppDbContext context, MetricsBroadcaster broadcaster)
+    public ContainersController(IConfiguration configuration, AppDbContext context, MetricsBroadcaster broadcaster)
     {
         _configuration = configuration;
-        _authService = authService;
         _context = context;
         _broadcaster = broadcaster;
     }
@@ -49,17 +47,8 @@ public class ContainersController : ControllerBase
     }
 
     [HttpGet("stream")]
-    [AllowAnonymous]
     public async Task StreamMetrics(CancellationToken cancellationToken)
     {
-        var refreshToken = Request.Cookies["refreshToken"];
-
-        if (refreshToken == null || await _authService.ValidateAsync(refreshToken) == null)
-        {
-            Response.StatusCode = 401;
-            return;
-        }
-
         Response.Headers["Content-Type"] = "text/event-stream";
         Response.Headers["Cache-Control"] = "no-cache";
         Response.Headers["X-Accel-Buffering"] = "no";
