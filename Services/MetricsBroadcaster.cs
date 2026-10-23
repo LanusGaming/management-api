@@ -9,6 +9,9 @@ public class MetricsBroadcaster
     private readonly List<Channel<List<ContainerSummary>>> _clients = new();
     private readonly object _lock = new();
 
+    // Most recent snapshot, served by GET /api/containers without touching the database
+    public IReadOnlyList<ContainerSummary> Latest { get; private set; } = [];
+
     public Channel<List<ContainerSummary>> Subscribe()
     {
         var channel = Channel.CreateUnbounded<List<ContainerSummary>>();
@@ -24,8 +27,11 @@ public class MetricsBroadcaster
 
     public void Broadcast(List<ContainerSummary> metrics)
     {
-        lock ( _lock) 
+        lock ( _lock)
+        {
+            Latest = metrics;
             foreach (var client in _clients)
                 client.Writer.TryWrite(metrics);
+        }
     }
 }

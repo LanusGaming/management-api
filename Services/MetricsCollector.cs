@@ -2,6 +2,7 @@
 using Management.Api.DTOs;
 using Management.Api.Models;
 using Microsoft.AspNetCore.SignalR.Protocol;
+using System.Collections.Concurrent;
 using System.Net.Sockets;
 using System.Text.Json;
 
@@ -14,6 +15,12 @@ public class MetricsCollector : BackgroundService
     private readonly MetricsBroadcaster _broadcaster;
     private readonly HttpClient _dockerClient;
     private readonly TimeSpan _interval;
+
+    // Docker reports cumulative network counters since container start; the previous sample per
+    // container turns them into bytes per second.
+    private readonly ConcurrentDictionary<string, NetworkCounters> _lastNetworkCounters = new();
+
+    private readonly record struct NetworkCounters(long RxBytes, long TxBytes, DateTime RecordedAt);
 
     public MetricsCollector(IConfiguration configuration, IServiceScopeFactory scopeFactory, MetricsBroadcaster broadcaster)
     {
@@ -75,6 +82,10 @@ public class MetricsCollector : BackgroundService
         var tasks = containers.Select(c => CollectContainerAsync(c));
         var results = await Task.WhenAll(tasks);
 
+        // Forget counters of containers that no longer exist (e.g. recreated with a new id)
+        foreach (var containerId in _lastNetworkCounters.Keys.Except(containers.Select(c => c.Id)))
+            _lastNetworkCounters.TryRemove(containerId, out _);
+
         var valid = results.Where(r => r.HasValue).Select(r => r!.Value).ToList();
         if (!valid.Any()) return;
 
@@ -113,15 +124,16 @@ public class MetricsCollector : BackgroundService
             var rxBytes = stats.Networks?.Values.Sum(n => n.RxBytes) ?? 0;
             var txBytes = stats.Networks?.Values.Sum(n => n.TxBytes) ?? 0;
             var now = DateTime.UtcNow;
-            
+            var (rxPerSecond, txPerSecond) = CalculateNetworkRates(container.Id, rxBytes, txBytes, now);
+
             return (new ContainerMetric
             {
                 ContainerId = container.Id,
                 ContainerName = name,
                 CpuPercent = cpu,
                 MemoryBytes = memory,
-                NetworkRxBytes = rxBytes,
-                NetworkTxBytes = txBytes,
+                NetworkRxBytesPerSecond = rxPerSecond,
+                NetworkTxBytesPerSecond = txPerSecond,
                 RecordedAt = now
             },
             new ContainerSummary
@@ -134,6 +146,8 @@ public class MetricsCollector : BackgroundService
                 MemoryBytes = memory,
                 NetworkRxBytes = rxBytes,
                 NetworkTxBytes = txBytes,
+                NetworkRxBytesPerSecond = rxPerSecond,
+                NetworkTxBytesPerSecond = txPerSecond,
                 RecordedAt = now
             }
             );
@@ -143,6 +157,19 @@ public class MetricsCollector : BackgroundService
             Console.WriteLine($"Failed to collect metrics for {container.Id[..12]}: {ex.Message}");
             return null;
         }
+    }
+
+    private (double rx, double tx) CalculateNetworkRates(string containerId, long rxBytes, long txBytes, DateTime now)
+    {
+        var hasPrevious = _lastNetworkCounters.TryGetValue(containerId, out var previous);
+        _lastNetworkCounters[containerId] = new NetworkCounters(rxBytes, txBytes, now);
+
+        var seconds = (now - previous.RecordedAt).TotalSeconds;
+        // First sample, or the counters were reset by a container restart
+        if (!hasPrevious || seconds <= 0 || rxBytes < previous.RxBytes || txBytes < previous.TxBytes)
+            return (0, 0);
+
+        return ((rxBytes - previous.RxBytes) / seconds, (txBytes - previous.TxBytes) / seconds);
     }
 
     private long CalulateMemoryUsage(DockerStats stats)

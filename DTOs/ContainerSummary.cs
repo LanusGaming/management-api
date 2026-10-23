@@ -10,5 +10,7 @@ public class ContainerSummary
     public long MemoryBytes { get; set; }
     public long NetworkRxBytes { get; set; }
     public long NetworkTxBytes { get; set; }
+    public double NetworkRxBytesPerSecond { get; set; }
+    public double NetworkTxBytesPerSecond { get; set; }
     public DateTime RecordedAt { get; set; }
 }

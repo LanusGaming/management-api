@@ -24,17 +24,13 @@ namespace Management.Api.Migrations
 
             modelBuilder.Entity("Management.Api.Models.ContainerMetric", b =>
                 {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("ContainerId")
-                        .IsRequired()
+                    b.Property<string>("ContainerName")
                         .HasColumnType("text");
 
-                    b.Property<string>("ContainerName")
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ContainerId")
                         .IsRequired()
                         .HasColumnType("text");
 
@@ -44,18 +40,13 @@ namespace Management.Api.Migrations
                     b.Property<long>("MemoryBytes")
                         .HasColumnType("bigint");
 
-                    b.Property<long>("NetworkRxBytes")
-                        .HasColumnType("bigint");
+                    b.Property<double>("NetworkRxBytesPerSecond")
+                        .HasColumnType("double precision");
 
-                    b.Property<long>("NetworkTxBytes")
-                        .HasColumnType("bigint");
+                    b.Property<double>("NetworkTxBytesPerSecond")
+                        .HasColumnType("double precision");
 
-                    b.Property<DateTime>("RecordedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("RecordedAt");
+                    b.HasKey("ContainerName", "RecordedAt");
 
                     b.ToTable("ContainerMetrics");
                 });
