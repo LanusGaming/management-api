@@ -12,21 +12,25 @@ public class MetricsCollector : BackgroundService
 {
     private readonly IConfiguration _configuration;
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly MetricsBroadcaster _broadcaster;
+    private readonly MetricsBroadcaster<List<ContainerSummary>> _broadcaster;
+    private readonly FileIoReader _fileIoReader;
     private readonly HttpClient _dockerClient;
     private readonly TimeSpan _interval;
 
-    // Docker reports cumulative network counters since container start; the previous sample per
-    // container turns them into bytes per second.
-    private readonly ConcurrentDictionary<string, NetworkCounters> _lastNetworkCounters = new();
+    // CPU time, network and file I/O counters are cumulative (since container start / tracer start); the
+    // previous sample per container turns them into CPU % and bytes per second.
+    private readonly ConcurrentDictionary<string, Counters> _lastCounters = new();
 
-    private readonly record struct NetworkCounters(long RxBytes, long TxBytes, DateTime RecordedAt);
+    private readonly record struct Counters(long CpuUsage, long SystemCpuUsage, long RxBytes, long TxBytes,
+        long? FileReadBytes, long? FileWriteBytes, DateTime RecordedAt);
 
-    public MetricsCollector(IConfiguration configuration, IServiceScopeFactory scopeFactory, MetricsBroadcaster broadcaster)
+    public MetricsCollector(IConfiguration configuration, IServiceScopeFactory scopeFactory,
+        MetricsBroadcaster<List<ContainerSummary>> broadcaster, FileIoReader fileIoReader)
     {
         _configuration = configuration;
         _scopeFactory = scopeFactory;
         _broadcaster = broadcaster;
+        _fileIoReader = fileIoReader;
 
         var handler = new SocketsHttpHandler
         {
@@ -79,12 +83,13 @@ public class MetricsCollector : BackgroundService
 
         if (containers == null || !containers.Any()) return;
 
-        var tasks = containers.Select(c => CollectContainerAsync(c));
+        var fileIo = _fileIoReader.ReadAll();
+        var tasks = containers.Select(c => CollectContainerAsync(c, fileIo));
         var results = await Task.WhenAll(tasks);
 
         // Forget counters of containers that no longer exist (e.g. recreated with a new id)
-        foreach (var containerId in _lastNetworkCounters.Keys.Except(containers.Select(c => c.Id)))
-            _lastNetworkCounters.TryRemove(containerId, out _);
+        foreach (var containerId in _lastCounters.Keys.Except(containers.Select(c => c.Id)))
+            _lastCounters.TryRemove(containerId, out _);
 
         var valid = results.Where(r => r.HasValue).Select(r => r!.Value).ToList();
         if (!valid.Any()) return;
@@ -95,11 +100,14 @@ public class MetricsCollector : BackgroundService
         _broadcaster.Broadcast(valid.Select(r => r.summary).ToList());
     }
 
-    private async Task<(ContainerMetric metric, ContainerSummary summary)?> CollectContainerAsync(DockerContainer container)
+    private async Task<(ContainerMetric metric, ContainerSummary summary)?> CollectContainerAsync(
+        DockerContainer container, Dictionary<string, FileIoReader.IoCounters>? fileIo)
     {
         try
         {
-            var statsJson = await _dockerClient.GetStringAsync($"/containers/{container.Id}/stats?stream=false");
+            // one-shot: answer right away. Without it Docker waits for its next sample (~1.7 s) to fill in
+            // precpu_stats, which made every collection cycle take ~2 s. CPU % comes from our previous sample.
+            var statsJson = await _dockerClient.GetStringAsync($"/containers/{container.Id}/stats?stream=false&one-shot=true");
             var stats = JsonSerializer.Deserialize<DockerStats>(statsJson);
 
             if (stats == null) return null;
@@ -119,12 +127,14 @@ public class MetricsCollector : BackgroundService
             }
 
             var name = container.Names.FirstOrDefault()?.TrimStart('/') ?? "unknown";
-            var cpu = CalculateCpuPercent(stats);
             var memory = CalulateMemoryUsage(stats);
             var rxBytes = stats.Networks?.Values.Sum(n => n.RxBytes) ?? 0;
             var txBytes = stats.Networks?.Values.Sum(n => n.TxBytes) ?? 0;
+            FileIoReader.IoCounters? io = fileIo != null && fileIo.TryGetValue(container.Id, out var c) ? c : null;
             var now = DateTime.UtcNow;
-            var (rxPerSecond, txPerSecond) = CalculateNetworkRates(container.Id, rxBytes, txBytes, now);
+            var rates = CalculateRates(container.Id, stats.CpuStats.OnlineCpus, new Counters(
+                stats.CpuStats.CpuUsage.TotalUsage, stats.CpuStats.SystemCpuUsage, rxBytes, txBytes, io?.ReadBytes, io?.WriteBytes, now));
+            var cpu = rates.Cpu;
 
             return (new ContainerMetric
             {
@@ -132,8 +142,10 @@ public class MetricsCollector : BackgroundService
                 ContainerName = name,
                 CpuPercent = cpu,
                 MemoryBytes = memory,
-                NetworkRxBytesPerSecond = rxPerSecond,
-                NetworkTxBytesPerSecond = txPerSecond,
+                NetworkRxBytesPerSecond = rates.Rx,
+                NetworkTxBytesPerSecond = rates.Tx,
+                FileReadBytesPerSecond = rates.FileRead,
+                FileWriteBytesPerSecond = rates.FileWrite,
                 RecordedAt = now
             },
             new ContainerSummary
@@ -146,8 +158,10 @@ public class MetricsCollector : BackgroundService
                 MemoryBytes = memory,
                 NetworkRxBytes = rxBytes,
                 NetworkTxBytes = txBytes,
-                NetworkRxBytesPerSecond = rxPerSecond,
-                NetworkTxBytesPerSecond = txPerSecond,
+                NetworkRxBytesPerSecond = rates.Rx,
+                NetworkTxBytesPerSecond = rates.Tx,
+                FileReadBytesPerSecond = rates.FileRead,
+                FileWriteBytesPerSecond = rates.FileWrite,
                 RecordedAt = now
             }
             );
@@ -159,17 +173,32 @@ public class MetricsCollector : BackgroundService
         }
     }
 
-    private (double rx, double tx) CalculateNetworkRates(string containerId, long rxBytes, long txBytes, DateTime now)
+    private (double Cpu, double Rx, double Tx, double? FileRead, double? FileWrite) CalculateRates(
+        string containerId, int onlineCpus, Counters current)
     {
-        var hasPrevious = _lastNetworkCounters.TryGetValue(containerId, out var previous);
-        _lastNetworkCounters[containerId] = new NetworkCounters(rxBytes, txBytes, now);
+        var hasPrevious = _lastCounters.TryGetValue(containerId, out var previous);
+        _lastCounters[containerId] = current;
 
-        var seconds = (now - previous.RecordedAt).TotalSeconds;
-        // First sample, or the counters were reset by a container restart
-        if (!hasPrevious || seconds <= 0 || rxBytes < previous.RxBytes || txBytes < previous.TxBytes)
-            return (0, 0);
+        var seconds = hasPrevious ? (current.RecordedAt - previous.RecordedAt).TotalSeconds : 0;
 
-        return ((rxBytes - previous.RxBytes) / seconds, (txBytes - previous.TxBytes) / seconds);
+        // Share of all CPUs' time since the previous sample, scaled so 100 = one core (like docker stats)
+        var cpuDelta = current.CpuUsage - previous.CpuUsage;
+        var systemDelta = current.SystemCpuUsage - previous.SystemCpuUsage;
+        var cpu = hasPrevious && cpuDelta >= 0 && systemDelta > 0 ? (double)cpuDelta / systemDelta * onlineCpus * 100.0 : 0;
+
+        return (
+            cpu,
+            Rate(current.RxBytes, previous.RxBytes, seconds),
+            Rate(current.TxBytes, previous.TxBytes, seconds),
+            current.FileReadBytes is { } read ? Rate(read, previous.FileReadBytes ?? read, seconds) : null,
+            current.FileWriteBytes is { } write ? Rate(write, previous.FileWriteBytes ?? write, seconds) : null);
+    }
+
+    // 0 on the first sample, and when the counter went down (the container or the tracer restarted)
+    private static double Rate(long current, long previous, double seconds)
+    {
+        if (seconds <= 0 || current < previous) return 0;
+        return (current - previous) / seconds;
     }
 
     private long CalulateMemoryUsage(DockerStats stats)
@@ -185,15 +214,5 @@ public class MetricsCollector : BackgroundService
             var inactiveFile = stats.MemoryStats.Stats.GetValueOrDefault("inactive_file", 0L);
             return stats.MemoryStats.Usage - inactiveFile;
         }
-    }
-
-    private double CalculateCpuPercent(DockerStats stats)
-    {
-        var cpuDelta = stats.CpuStats.CpuUsage.TotalUsage - stats.PreCpuStats.CpuUsage.TotalUsage;
-        var systemDelta = stats.CpuStats.SystemCpuUsage - stats.PreCpuStats.SystemCpuUsage;
-
-        if(systemDelta <= 0) return 0;
-
-        return (double) cpuDelta / systemDelta * stats.CpuStats.OnlineCpus * 100.0;
     }
 }

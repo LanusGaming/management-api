@@ -32,3 +32,12 @@ jobs:
           tags: |
             git.patrick-dev.net/${{ secrets.REGISTRY_USER }}/management-api:latest
             git.patrick-dev.net/${{ secrets.REGISTRY_USER }}/management-api:${{ gitea.sha }}
+
+      - name: Build and push fileio-tracer
+        uses: docker/build-push-action@v6
+        with:
+          context: fileio-tracer
+          push: true
+          tags: |
+            git.patrick-dev.net/${{ secrets.REGISTRY_USER }}/fileio-tracer:latest
+            git.patrick-dev.net/${{ secrets.REGISTRY_USER }}/fileio-tracer:${{ gitea.sha }}

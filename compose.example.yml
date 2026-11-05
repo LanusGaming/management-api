@@ -19,9 +19,26 @@ services:
       Jwt__Authority: "http://auth_api:8080"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # Host metrics: interfaces, sensors, RAPL, cgroups; Unraid's disk names
+      - /sys:/host/sys:ro
+      - /var/local/emhttp:/host/emhttp:ro
+      # Per-container file I/O totals written by fileio_tracer (RAM-backed /tmp on Unraid)
+      - /tmp/fileio:/run/fileio:ro
     depends_on:
       - dashboard_database
       - auth_api
+
+  # Counts regular-file I/O per container with eBPF, see fileio-tracer/
+  fileio_tracer:
+    image: git.patrick-dev.net/patrick/fileio-tracer:latest
+    container_name: fileio_tracer
+    restart: unless-stopped
+    privileged: true
+    cgroup: host
+    init: true
+    volumes:
+      - /lib/modules:/lib/modules:ro
+      - /tmp/fileio:/run/fileio
 
   auth_api:
     image: git.patrick-dev.net/patrick/auth-api:latest

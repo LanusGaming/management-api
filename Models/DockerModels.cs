@@ -37,9 +37,6 @@ public class DockerStats
     [JsonPropertyName("cpu_stats")]
     public CpuStats CpuStats { get; set; } = new();
 
-    [JsonPropertyName("precpu_stats")]
-    public CpuStats PreCpuStats { get; set; } = new();
-
     [JsonPropertyName("memory_stats")]
     public MemoryStats MemoryStats { get; set; } = new();
 

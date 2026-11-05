@@ -37,6 +37,12 @@ namespace Management.Api.Migrations
                     b.Property<double>("CpuPercent")
                         .HasColumnType("double precision");
 
+                    b.Property<double?>("FileReadBytesPerSecond")
+                        .HasColumnType("double precision");
+
+                    b.Property<double?>("FileWriteBytesPerSecond")
+                        .HasColumnType("double precision");
+
                     b.Property<long>("MemoryBytes")
                         .HasColumnType("bigint");
 
@@ -49,6 +55,22 @@ namespace Management.Api.Migrations
                     b.HasKey("ContainerName", "RecordedAt");
 
                     b.ToTable("ContainerMetrics");
+                });
+
+            modelBuilder.Entity("Management.Api.Models.HostMetric", b =>
+                {
+                    b.Property<string>("Metric")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<double>("Value")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("Metric", "RecordedAt");
+
+                    b.ToTable("HostMetrics");
                 });
 #pragma warning restore 612, 618
         }

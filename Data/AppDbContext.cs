@@ -8,6 +8,7 @@ public class AppDbContext : DbContext
     public AppDbContext(DbContextOptions<AppDbContext> options) : base(options) { }
 
     public DbSet<ContainerMetric> ContainerMetrics { get; set; }
+    public DbSet<HostMetric> HostMetrics { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -15,5 +16,8 @@ public class AppDbContext : DbContext
         // adds its own index on RecordedAt.
         modelBuilder.Entity<ContainerMetric>()
             .HasKey(m => new { m.ContainerName, m.RecordedAt });
+
+        modelBuilder.Entity<HostMetric>()
+            .HasKey(m => new { m.Metric, m.RecordedAt });
     }
 }

@@ -12,4 +12,7 @@ public class ContainerMetric
     public long MemoryBytes { get; set; }
     public double NetworkRxBytesPerSecond { get; set; }
     public double NetworkTxBytesPerSecond { get; set; }
+    // Null while the fileio-tracer sidecar isn't running, and for samples from before these columns existed
+    public double? FileReadBytesPerSecond { get; set; }
+    public double? FileWriteBytesPerSecond { get; set; }
 }

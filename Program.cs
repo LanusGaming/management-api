@@ -1,4 +1,5 @@
 using Management.Api.Data;
+using Management.Api.DTOs;
 using Management.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -11,8 +12,11 @@ builder.Services.AddControllers();
 builder.Services.AddDbContext<AppDbContext>(options =>
    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.AddSingleton<MetricsBroadcaster>();
+builder.Services.AddSingleton<MetricsBroadcaster<List<ContainerSummary>>>();
+builder.Services.AddSingleton<MetricsBroadcaster<HostSummary>>();
+builder.Services.AddSingleton<FileIoReader>();
 builder.Services.AddHostedService<MetricsCollector>();
+builder.Services.AddHostedService<HostMetricsCollector>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -30,7 +34,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             OnMessageReceived = ctx =>
             {
-                if (ctx.Request.Path.StartsWithSegments("/api/containers/stream")
+                if ((ctx.Request.Path.StartsWithSegments("/api/containers/stream")
+                        || ctx.Request.Path.StartsWithSegments("/api/host/stream"))
                     && ctx.Request.Query.TryGetValue("access_token", out var token))
                 {
                     ctx.Token = token;
@@ -51,6 +56,8 @@ app.MapControllers();
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    // Migrations copy whole history tiers (millions of rows), which can take longer than the 30 s default
+    db.Database.SetCommandTimeout(TimeSpan.FromMinutes(10));
     db.Database.Migrate();
 }
 

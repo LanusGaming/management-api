@@ -12,5 +12,8 @@ public class ContainerSummary
     public long NetworkTxBytes { get; set; }
     public double NetworkRxBytesPerSecond { get; set; }
     public double NetworkTxBytesPerSecond { get; set; }
+    // Regular-file I/O, counted by the fileio-tracer sidecar; null while it isn't running
+    public double? FileReadBytesPerSecond { get; set; }
+    public double? FileWriteBytesPerSecond { get; set; }
     public DateTime RecordedAt { get; set; }
 }

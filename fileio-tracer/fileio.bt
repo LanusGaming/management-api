@@ -1,0 +1,55 @@
+#include <linux/fs.h>
+
+config = { max_map_keys = 65536 }
+
+// Per-cgroup bytes read from / written to regular files. Sockets, pipes and devices aren't regular
+// files; procfs, sysfs, cgroupfs and tmpfs files are, so those are excluded by superblock magic.
+// The file is remembered when vfs_read/vfs_write starts, and the byte count taken when the syscall
+// returns. kretprobes would be simpler, but their small pool of in-flight slots (2 per CPU) runs out
+// when hundreds of threads sit blocked in read(), and then returns get lost.
+// In-flight calls are keyed by curtask (the thread's task_struct), not tid: this runs in its own pid
+// namespace, where tid can't be resolved for other containers' threads (the helper fails with EINVAL).
+
+kprobe:vfs_read, kprobe:vfs_readv { @rf[curtask] = arg0; }
+kprobe:vfs_write, kprobe:vfs_writev { @wf[curtask] = arg0; }
+
+// x86_64: read 0, pread64 17, readv 19, preadv 295, preadv2 327
+tracepoint:raw_syscalls:sys_exit /@rf[curtask]/ {
+  $id = args.id;
+  if ($id == 0 || $id == 17 || $id == 19 || $id == 295 || $id == 327) {
+    $f = (struct file *)@rf[curtask];
+    $m = $f->f_inode->i_sb->s_magic;
+    if (args.ret > 0 && ($f->f_inode->i_mode & 0xf000) == 0x8000
+        && $m != 0x9fa0 && $m != 0x62656572 && $m != 0x63677270 && $m != 0x01021994) {
+      @read[cgroup] = sum(args.ret);
+    }
+  }
+  delete(@rf[curtask]);
+}
+
+// x86_64: write 1, pwrite64 18, writev 20, pwritev 296, pwritev2 328
+tracepoint:raw_syscalls:sys_exit /@wf[curtask]/ {
+  $id = args.id;
+  if ($id == 1 || $id == 18 || $id == 20 || $id == 296 || $id == 328) {
+    $f = (struct file *)@wf[curtask];
+    $m = $f->f_inode->i_sb->s_magic;
+    if (args.ret > 0 && ($f->f_inode->i_mode & 0xf000) == 0x8000
+        && $m != 0x9fa0 && $m != 0x62656572 && $m != 0x63677270 && $m != 0x01021994) {
+      @write[cgroup] = sum(args.ret);
+    }
+  }
+  delete(@wf[curtask]);
+}
+
+interval:s:1 {
+  print(@read);
+  print(@write);
+  printf("end\n");
+}
+
+END {
+  clear(@rf);
+  clear(@wf);
+  clear(@read);
+  clear(@write);
+}
